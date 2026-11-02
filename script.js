@@ -58,6 +58,48 @@ class Fluid {
         }
     }
 
+    // New method: Generates a radial outward burst of velocity and density
+    applyCircularForce(x, y, holdDurationSeconds) {
+        // Cap duration so the explosion doesn't exceed screen limits
+        let maxDuration = Math.min(holdDurationSeconds, 3.0); 
+        
+        // Scale parameters based on how long the user held the click
+        let radius = Math.floor(3 + maxDuration * 10); 
+        let force = 2 + maxDuration * 25; 
+        let densityAmount = 2 + maxDuration * 15; 
+
+        for (let j = -radius; j <= radius; j++) {
+            for (let i = -radius; i <= radius; i++) {
+                let distSq = i * i + j * j;
+                if (distSq <= radius * radius) {
+                    let cx = x + i;
+                    let cy = y + j;
+                    
+                    if (cx > 0 && cx < this.cols - 1 && cy > 0 && cy < this.rows - 1) {
+                        let idx = this.IX(cx, cy);
+                        
+                        if (distSq === 0) {
+                            // Center of the click just gets density (foam)
+                            this.density[idx] += densityAmount;
+                            continue;
+                        }
+                        
+                        let dist = Math.sqrt(distSq);
+                        let nx = i / dist;
+                        let ny = j / dist;
+                        
+                        // Force falls off linearly towards the edges of the radius
+                        let falloff = 1 - (dist / radius);
+                        
+                        this.Vx[idx] += nx * force * falloff;
+                        this.Vy[idx] += ny * force * falloff;
+                        this.density[idx] += densityAmount * falloff;
+                    }
+                }
+            }
+        }
+    }
+
     step() {
         let visc = this.visc; let diff = this.diff; let dt = this.dt;
         let Vx = this.Vx; let Vy = this.Vy; let Vx0 = this.Vx0; let Vy0 = this.Vy0;
@@ -170,7 +212,6 @@ function resize() {
     ctx.font = `${fontSize}px monospace`;
     ctx.textBaseline = 'top';
     
-    // Reset fluid grid to match screen resolution
     fluid = new Fluid(cols, rows);
 }
 
@@ -179,15 +220,29 @@ init();
 
 let isDrawing = false;
 let lastX = 0, lastY = 0;
+let clickStartTime = 0; // Tracks when the user first clicks
 
 function handleStart(e) {
     isDrawing = true;
+    clickStartTime = Date.now();
     let point = e.touches ? e.touches[0] : e;
     lastX = point.clientX;
     lastY = point.clientY;
 }
 
-function handleEnd() { isDrawing = false; }
+function handleEnd(e) { 
+    if (isDrawing) {
+        // Calculate total hold time in seconds
+        let durationSeconds = (Date.now() - clickStartTime) / 1000;
+        
+        let gridX = Math.floor(lastX / fontWidth);
+        let gridY = Math.floor(lastY / fontSize);
+        
+        // Trigger the splash based on duration at the release coordinates
+        fluid.applyCircularForce(gridX, gridY, durationSeconds);
+    }
+    isDrawing = false; 
+}
 
 function handleMove(e) {
     if (!isDrawing) return;
@@ -256,7 +311,7 @@ function render() {
             
             let value = (wave1 + wave2 + wave3) / 3;
             
-            // Mouse stroke adds density (foam and height) to the waves
+            // Mouse stroke and splash logic adds density (foam and height) to the waves
             value += d * 0.25; 
             
             // Occasional "foam" spark on the peaks
