@@ -392,7 +392,7 @@ function runCmd(inputStr) {
         fluid.applyCircularForce(cx, cy, 3.0);
         printLine('Splash deployed at coordinates (' + cx + ', ' + cy + ')');
     } else if (cmd === 'theme') {
-        toggleTheme();
+        toggleTheme(); 
         printLine(`Theme switched to ${isDarkMode ? 'Dark' : 'Light'} Mode.`);
     } else if (cmd === 'color') {
         if (args.length === 4) {
