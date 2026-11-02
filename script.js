@@ -336,3 +336,27 @@ function render() {
 }
 
 render();
+
+// Window minimize logic
+const minimizeBtn = document.getElementById('minimize-btn');
+const modalWindow = document.getElementById('modal-window');
+
+minimizeBtn.addEventListener('click', (e) => {
+    // Prevent the click from bleeding through to the canvas fluid simulation
+    e.stopPropagation();
+    
+    modalWindow.classList.toggle('minimized');
+    if (modalWindow.classList.contains('minimized')) {
+        minimizeBtn.textContent = '□'; // Maximize symbol
+    } else {
+        minimizeBtn.textContent = '_'; // Minimize symbol
+    }
+});
+
+// Prevent fluid interactions when clicking inside the window
+modalWindow.addEventListener('mousedown', (e) => e.stopPropagation());
+modalWindow.addEventListener('touchstart', (e) => e.stopPropagation());
+modalWindow.addEventListener('mousemove', (e) => e.stopPropagation());
+modalWindow.addEventListener('touchmove', (e) => e.stopPropagation());
+modalWindow.addEventListener('mouseup', (e) => e.stopPropagation());
+modalWindow.addEventListener('touchend', (e) => e.stopPropagation());
