@@ -5,6 +5,7 @@ document.body.appendChild(canvas);
 let cols, rows, fontWidth;
 const fontSize = 16;
 let fluid;
+let isDarkMode = false; // Default is Light Mode
 
 // Characters ordered by visual density
 const palette = ['.', ',', '-', '~', '/', '+', '=', '?', 'X', '&', '#', '@'];
@@ -276,7 +277,8 @@ function render() {
     
     fluid.step(); 
     
-    ctx.fillStyle = '#010409';
+    // Dynamically update the canvas background based on current theme
+    ctx.fillStyle = isDarkMode ? '#010409' : '#e2e8f0';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     for (let y = 0; y < rows; y++) {
@@ -315,7 +317,20 @@ render();
 
 // --- WINDOW & TERMINAL LOGIC ---
 const minimizeBtn = document.getElementById('minimize-btn');
+const themeBtn = document.getElementById('theme-btn');
 const modalWindow = document.getElementById('modal-window');
+
+function toggleTheme() {
+    isDarkMode = !isDarkMode;
+    document.body.classList.toggle('dark-mode', isDarkMode);
+    themeBtn.textContent = isDarkMode ? '☀' : '☾';
+}
+
+themeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleTheme();
+    printLine(`Theme switched to ${isDarkMode ? 'Dark' : 'Light'} Mode.`);
+});
 
 minimizeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -337,7 +352,7 @@ const termOutput = document.getElementById('terminal-output');
 const termContainer = document.getElementById('terminal');
 
 const cmds = {
-    'help': 'Available commands:\n  help   - Show this message\n  clear  - Clear terminal output\n  splash - Create a random fluid splash\n  color  - Change wave base color (usage: color R G B)\n  echo   - Print given text\n  about  - ASCII Sea OS info',
+    'help': 'Available commands:\n  help   - Show this message\n  clear  - Clear terminal output\n  splash - Create a random fluid splash\n  color  - Change wave base color (usage: color R G B)\n  theme  - Toggle Dark/Light Mode\n  echo   - Print given text\n  about  - ASCII Sea OS info',
     'about': 'ASCII Sea OS v1.0.0\nPowered by Navier-Stokes Stable Fluids algorithm.',
     'clear': () => { termOutput.innerHTML = ''; }
 };
@@ -372,33 +387,30 @@ function runCmd(inputStr) {
     } else if (cmd === 'echo') {
         printLine(args.slice(1).join(' '));
     } else if (cmd === 'splash') {
-        // Trigger a massive splash in the center of the screen
         let cx = Math.floor(cols / 2);
         let cy = Math.floor(rows / 2);
         fluid.applyCircularForce(cx, cy, 3.0);
         printLine('Splash deployed at coordinates (' + cx + ', ' + cy + ')');
+    } else if (cmd === 'theme') {
+        toggleTheme();
+        printLine(`Theme switched to ${isDarkMode ? 'Dark' : 'Light'} Mode.`);
     } else if (cmd === 'color') {
         if (args.length === 4) {
             let r = parseInt(args[1]);
             let g = parseInt(args[2]);
             let b = parseInt(args[3]);
             
-            // Validate inputs
             if (!isNaN(r) && !isNaN(g) && !isNaN(b) && 
                 r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255) {
                 
-                // Automatically generate a 12-step gradient palette based on the given base RGB
                 for (let i = 0; i < 12; i++) {
                     let cr, cg, cb;
-                    
                     if (i <= 7) {
-                        // Steps 0-7: Scale from dark (12.5% brightness) to the provided base color (100%)
                         let t = (i + 1) / 8; 
                         cr = Math.floor(r * t);
                         cg = Math.floor(g * t);
                         cb = Math.floor(b * t);
                     } else {
-                        // Steps 8-11: Scale from the base color up to pure white foam (255, 255, 255)
                         let t = (i - 7) / 4; 
                         cr = Math.floor(r + (255 - r) * t);
                         cg = Math.floor(g + (255 - g) * t);
