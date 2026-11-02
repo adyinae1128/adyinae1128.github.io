@@ -1,11 +1,38 @@
+/* Base Variables: Light Mode (Default) */
+:root {
+    --bg-canvas: #e2e8f0; 
+    --win-bg: #f8f9fa;
+    --win-border: #cbd5e1;
+    --win-header-bg: #e2e8f0;
+    --win-shadow: rgba(0, 0, 0, 0.2);
+    --win-title-color: #475569;
+    --term-text: #5e35b1; /* Dark Lilac */
+    --btn-color: #64748b;
+    --btn-hover: #0f172a;
+}
+
+/* Dark Mode Variables */
+body.dark-mode {
+    --bg-canvas: #010409;
+    --win-bg: #0c0c0c;
+    --win-border: #333;
+    --win-header-bg: #2d2d2d;
+    --win-shadow: rgba(0, 0, 0, 0.8);
+    --win-title-color: #aaa;
+    --term-text: #d4b5f9; /* Light Lilac */
+    --btn-color: #aaa;
+    --btn-hover: #fff;
+}
+
 body, html {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: #010409;
+    background-color: var(--bg-canvas);
     font-family: monospace;
+    transition: background-color 0.4s ease;
 }
 
 canvas {
@@ -22,12 +49,12 @@ canvas {
     left: 50%;
     transform: translate(-50%, -50%);
     width: 450px;
-    background: #0c0c0c;
-    border: 1px solid #333;
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
     border-radius: 6px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 10px 30px var(--win-shadow);
     z-index: 10;
-    transition: width 0.3s ease, height 0.3s ease;
+    transition: width 0.3s ease, height 0.3s ease, background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
     overflow: hidden;
 }
 
@@ -36,36 +63,45 @@ canvas {
     justify-content: space-between;
     align-items: center;
     padding: 6px 12px;
-    background: #2d2d2d;
-    border-bottom: 1px solid #111;
+    background: var(--win-header-bg);
+    border-bottom: 1px solid var(--win-border);
     cursor: default;
+    transition: background 0.4s ease, border-color 0.4s ease;
 }
 
 .window-title {
     font-weight: bold;
     font-size: 13px;
-    color: #aaa;
+    color: var(--win-title-color);
+    transition: color 0.4s ease;
 }
 
-.minimize-btn {
+.window-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.minimize-btn, .theme-btn {
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--btn-color);
     font-family: monospace;
     font-weight: bold;
+    font-size: 14px;
     cursor: pointer;
-    padding: 0 5px;
+    padding: 0 4px;
+    transition: color 0.2s ease;
 }
 
-.minimize-btn:hover {
-    color: #fff;
+.minimize-btn:hover, .theme-btn:hover {
+    color: var(--btn-hover);
 }
 
 .window-content {
     transition: max-height 0.3s ease, opacity 0.3s ease;
     max-height: 300px;
     opacity: 1;
-    background: #000;
 }
 
 .window.minimized .window-content {
@@ -81,7 +117,8 @@ canvas {
     flex-direction: column;
     box-sizing: border-box;
     font-size: 14px;
-    color: #0f0; /* Terminal Green */
+    color: var(--term-text);
+    transition: color 0.4s ease;
 }
 
 #terminal-output {
@@ -96,18 +133,20 @@ canvas {
 }
 
 .prompt {
-    color: #0f0;
+    color: var(--term-text);
     margin-right: 8px;
     white-space: nowrap;
+    transition: color 0.4s ease;
 }
 
 #terminal-input {
     background: transparent;
     border: none;
-    color: #0f0;
+    color: var(--term-text);
     font-family: monospace;
     font-size: 14px;
     flex-grow: 1;
     outline: none;
     width: 100%;
+    transition: color 0.4s ease;
 }
