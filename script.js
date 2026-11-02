@@ -58,12 +58,8 @@ class Fluid {
         }
     }
 
-    // New method: Generates a radial outward burst of velocity and density
     applyCircularForce(x, y, holdDurationSeconds) {
-        // Cap duration so the explosion doesn't exceed screen limits
         let maxDuration = Math.min(holdDurationSeconds, 3.0); 
-        
-        // Scale parameters based on how long the user held the click
         let radius = Math.floor(3 + maxDuration * 10); 
         let force = 2 + maxDuration * 25; 
         let densityAmount = 2 + maxDuration * 15; 
@@ -79,7 +75,6 @@ class Fluid {
                         let idx = this.IX(cx, cy);
                         
                         if (distSq === 0) {
-                            // Center of the click just gets density (foam)
                             this.density[idx] += densityAmount;
                             continue;
                         }
@@ -87,8 +82,6 @@ class Fluid {
                         let dist = Math.sqrt(distSq);
                         let nx = i / dist;
                         let ny = j / dist;
-                        
-                        // Force falls off linearly towards the edges of the radius
                         let falloff = 1 - (dist / radius);
                         
                         this.Vx[idx] += nx * force * falloff;
@@ -114,10 +107,9 @@ class Fluid {
         this.diffuse(0, s, density, diff, dt);
         this.advect(0, density, s, Vx, Vy, dt);
 
-        // Natural dampening (dissipation)
         for(let i = 0; i < this.size; i++) {
-            this.density[i] *= 0.95; // Fade foam rapidly
-            this.Vx[i] *= 0.98;      // Dampen water momentum
+            this.density[i] *= 0.95; 
+            this.Vx[i] *= 0.98;      
             this.Vy[i] *= 0.98;
         }
     }
@@ -155,7 +147,7 @@ class Fluid {
     }
 
     advect(b, d, d0, u, v, dt) {
-        let dt0 = dt * 15.0; // Advection multiplier
+        let dt0 = dt * 15.0; 
         for (let j = 1; j < this.rows - 1; j++) {
             for (let i = 1; i < this.cols - 1; i++) {
                 let x = i - dt0 * u[this.IX(i, j)];
@@ -220,9 +212,10 @@ init();
 
 let isDrawing = false;
 let lastX = 0, lastY = 0;
-let clickStartTime = 0; // Tracks when the user first clicks
+let clickStartTime = 0;
 
 function handleStart(e) {
+    if (e.target.closest('#modal-window')) return; // Ignore clicks in window
     isDrawing = true;
     clickStartTime = Date.now();
     let point = e.touches ? e.touches[0] : e;
@@ -232,13 +225,9 @@ function handleStart(e) {
 
 function handleEnd(e) { 
     if (isDrawing) {
-        // Calculate total hold time in seconds
         let durationSeconds = (Date.now() - clickStartTime) / 1000;
-        
         let gridX = Math.floor(lastX / fontWidth);
         let gridY = Math.floor(lastY / fontSize);
-        
-        // Trigger the splash based on duration at the release coordinates
         fluid.applyCircularForce(gridX, gridY, durationSeconds);
     }
     isDrawing = false; 
@@ -258,7 +247,6 @@ function handleMove(e) {
     let gridX1 = Math.floor(currX / fontWidth);
     let gridY1 = Math.floor(currY / fontSize);
     
-    // Interpolate steps so fast strokes don't skip cells
     let dist = Math.max(Math.abs(gridX1 - gridX0), Math.abs(gridY1 - gridY0));
     let steps = Math.max(1, dist);
     
@@ -266,8 +254,7 @@ function handleMove(e) {
         let t = steps === 0 ? 0 : i / steps;
         let cx = Math.floor(gridX0 + (gridX1 - gridX0) * t);
         let cy = Math.floor(gridY0 + (gridY1 - gridY0) * t);
-        
-        fluid.addForce(cx, cy, dx * 0.1, dy * 0.1, 4.0); // Add momentum & visual density/foam
+        fluid.addForce(cx, cy, dx * 0.1, dy * 0.1, 4.0); 
     }
     
     lastX = currX;
@@ -285,11 +272,10 @@ window.addEventListener('touchmove', handleMove);
 let time = 0;
 
 function render() {
-    time += 0.015; // Animation speed for calm waves
+    time += 0.015; 
     
-    fluid.step(); // Compute Navier-Stokes physics
+    fluid.step(); 
     
-    // Clear background
     ctx.fillStyle = '#010409';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -300,63 +286,101 @@ function render() {
             let vy = fluid.Vy[idx];
             let d = fluid.density[idx];
             
-            // Coordinate scaling for wave size, physically displaced by fluid momentum
             let nx = (x - vx * 5) * 0.05;
             let ny = (y - vy * 5) * 0.08;
 
-            // Combine multiple sine waves for organic fluid movement
             let wave1 = Math.sin(nx + time) * Math.cos(ny + time * 0.8);
             let wave2 = Math.sin(nx * 1.5 - time * 1.2) * Math.sin(ny * 1.5 + time * 0.5);
             let wave3 = Math.sin(nx * 0.4 + ny * 0.6 - time * 0.4);
             
             let value = (wave1 + wave2 + wave3) / 3;
             
-            // Mouse stroke and splash logic adds density (foam and height) to the waves
             value += d * 0.25; 
             
-            // Occasional "foam" spark on the peaks
             if (value > 0.85 && Math.random() > 0.95) {
                 value += 0.2;
             }
 
-            // Normalize to 0 - 1
             let normalized = (value + 1) / 2;
-            
-            // Map to palette indices
             let index = Math.floor(normalized * palette.length);
             index = Math.max(0, Math.min(palette.length - 1, index));
 
-            // Draw character
             ctx.fillStyle = colors[index];
             ctx.fillText(palette[index], x * fontWidth, y * fontSize);
         }
     }
-    
     requestAnimationFrame(render);
 }
-
 render();
 
-// Window minimize logic
+// --- WINDOW & TERMINAL LOGIC ---
 const minimizeBtn = document.getElementById('minimize-btn');
 const modalWindow = document.getElementById('modal-window');
 
 minimizeBtn.addEventListener('click', (e) => {
-    // Prevent the click from bleeding through to the canvas fluid simulation
     e.stopPropagation();
-    
     modalWindow.classList.toggle('minimized');
-    if (modalWindow.classList.contains('minimized')) {
-        minimizeBtn.textContent = '□'; // Maximize symbol
-    } else {
-        minimizeBtn.textContent = '_'; // Minimize symbol
-    }
+    minimizeBtn.textContent = modalWindow.classList.contains('minimized') ? '□' : '_';
 });
 
-// Prevent fluid interactions when clicking inside the window
+// Prevent fluid canvas interactions when operating the window
 modalWindow.addEventListener('mousedown', (e) => e.stopPropagation());
 modalWindow.addEventListener('touchstart', (e) => e.stopPropagation());
 modalWindow.addEventListener('mousemove', (e) => e.stopPropagation());
 modalWindow.addEventListener('touchmove', (e) => e.stopPropagation());
 modalWindow.addEventListener('mouseup', (e) => e.stopPropagation());
 modalWindow.addEventListener('touchend', (e) => e.stopPropagation());
+
+// Terminal Implementation
+const termInput = document.getElementById('terminal-input');
+const termOutput = document.getElementById('terminal-output');
+const termContainer = document.getElementById('terminal');
+
+const cmds = {
+    'help': 'Available commands:\n  help   - Show this message\n  clear  - Clear terminal output\n  splash - Create a random fluid splash\n  echo   - Print given text\n  about  - ASCII Sea OS info',
+    'about': 'ASCII Sea OS v1.0.0\nPowered by Navier-Stokes Stable Fluids algorithm.',
+    'clear': () => { termOutput.innerHTML = ''; }
+};
+
+termInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        const val = this.value.trim();
+        this.value = '';
+        
+        if (val) {
+            printLine(`root@sea:~$ ${val}`);
+            runCmd(val);
+        }
+    }
+});
+
+function printLine(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    termOutput.appendChild(div);
+    termContainer.scrollTop = termContainer.scrollHeight;
+}
+
+function runCmd(inputStr) {
+    const args = inputStr.split(' ');
+    const cmd = args[0].toLowerCase();
+
+    if (cmd === 'clear') {
+        cmds['clear']();
+    } else if (cmds[cmd] && typeof cmds[cmd] === 'string') {
+        printLine(cmds[cmd]);
+    } else if (cmd === 'echo') {
+        printLine(args.slice(1).join(' '));
+    } else if (cmd === 'splash') {
+        // Trigger a massive splash in the center of the screen
+        let cx = Math.floor(cols / 2);
+        let cy = Math.floor(rows / 2);
+        fluid.applyCircularForce(cx, cy, 3.0);
+        printLine('Splash deployed at coordinates (' + cx + ', ' + cy + ')');
+    } else {
+        printLine(`bash: ${cmd}: command not found`);
+    }
+}
+
+// Keep focus on input when clicking terminal area
+termContainer.addEventListener('click', () => termInput.focus());
