@@ -5,8 +5,75 @@ body, html {
     height: 100%;
     overflow: hidden;
     background-color: #010409; /* Deep dark background */
+    font-family: monospace;
 }
 
 canvas {
     display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.window {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    background: rgba(0, 11, 24, 0.85);
+    border: 1px solid #33B1FF;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    color: #99E0FF;
+    transition: width 0.3s ease, height 0.3s ease;
+}
+
+.window-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #002B4E;
+    border-bottom: 1px solid #33B1FF;
+    border-radius: 4px 4px 0 0;
+    cursor: default;
+}
+
+.window-title {
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.minimize-btn {
+    background: none;
+    border: none;
+    color: #99E0FF;
+    font-family: monospace;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.minimize-btn:hover {
+    color: #FFFFFF;
+}
+
+.window-content {
+    padding: 15px;
+    font-size: 14px;
+    line-height: 1.5;
+    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+    max-height: 200px;
+    opacity: 1;
+}
+
+/* State for minimized window */
+.window.minimized .window-content {
+    max-height: 0;
+    padding: 0 15px;
+    opacity: 0;
 }
