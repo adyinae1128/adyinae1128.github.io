@@ -5,84 +5,37 @@ document.body.appendChild(canvas);
 let cols, rows, fontWidth;
 const fontSize = 16;
 let fluid;
-let isDarkMode = false;
-let fishes = [];
 
 // Characters ordered by visual density
 const palette = ['.', ',', '-', '~', '/', '+', '=', '?', 'X', '&', '#', '@'];
 
 // Colors for the sea, from deep troughs to bright wave crests/foam
-let colors = [
+const colors = [
     '#000B18', '#001A33', '#002B4E', '#003E6B',
     '#00528A', '#0069AC', '#0081D0', '#009BFA',
     '#33B1FF', '#66C8FF', '#99E0FF', '#FFFFFF' 
 ];
 
-// --- AUTONOMOUS FISH AI ---
-class Fish {
-    constructor(cols, rows) {
-        this.x = Math.random() * cols;
-        this.y = Math.random() * rows;
-        this.angle = Math.random() * Math.PI * 2;
-        this.targetAngle = this.angle;
-        this.baseSpeed = 0.04 + Math.random() * 0.04;
-        
-        // Distinct, bright colors to stand out from the blue sea
-        this.color = ['#FF8C00', '#FFA500', '#FFD700', '#FF4500'][Math.floor(Math.random() * 4)];
-        this.facingRight = true;
-    }
+// --- BIG FISH ASCII ART ---
+const bigFishRight = [
+    "      _..----.._    ",
+    "    .'  .--.    '-. ",
+    "   /   /    \\      \\",
+    "><(   (  O   )      )",
+    "   \\   \\    /      /",
+    "    '._ '--'    .-' ",
+    "       `\"----\"`     "
+];
 
-    update(cols, rows, fluid) {
-        // Aimless wandering AI: Periodically pick a new direction
-        if (Math.random() < 0.02) {
-            this.targetAngle = this.angle + (Math.random() - 0.5) * Math.PI;
-        }
-        
-        // Smoothly steer towards the target angle
-        this.angle += (this.targetAngle - this.angle) * 0.05;
-
-        let vx = Math.cos(this.angle) * this.baseSpeed;
-        let vy = Math.sin(this.angle) * this.baseSpeed;
-
-        let fluidVx = 0;
-        let fluidVy = 0;
-        let gx = Math.floor(this.x);
-        let gy = Math.floor(this.y);
-
-        // Fluid physics interaction
-        if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
-            let idx = fluid.IX(gx, gy);
-            
-            // Get swept by the fluid currents
-            fluidVx = fluid.Vx[idx] * 3.0;
-            fluidVy = fluid.Vy[idx] * 3.0;
-            
-            // Fish push back against the water, generating tiny wakes/foam
-            if (Math.random() < 0.2) {
-                fluid.addForce(gx, gy, -vx * 0.5, -vy * 0.5, 0.5);
-            }
-        }
-
-        let totalVx = vx + fluidVx;
-        let totalVy = vy + fluidVy;
-
-        this.x += totalVx;
-        this.y += totalVy;
-        this.facingRight = totalVx >= 0;
-
-        // Wrap around screen edges seamlessly
-        if (this.x < -3) this.x = cols + 3;
-        if (this.x > cols + 3) this.x = -3;
-        if (this.y < -1) this.y = rows + 1;
-        if (this.y > rows + 1) this.y = -1;
-    }
-
-    draw(ctx, fontWidth, fontSize) {
-        ctx.fillStyle = this.color;
-        let char = this.facingRight ? '><>' : '<><';
-        ctx.fillText(char, this.x * fontWidth, this.y * fontSize);
-    }
-}
+const bigFishLeft = [
+    "    _..----.._      ",
+    " .-'    .--.  '.    ",
+    "/      /    \\   \\   ",
+    "(      (   O  )   )><",
+    "\\      \\    /   /   ",
+    " '-.    '--' _.'    ",
+    "    `\"----\"`        "
+];
 
 // --- NAVIER-STOKES FLUID DYNAMICS (Stable Fluids) ---
 class Fluid {
@@ -109,7 +62,7 @@ class Fluid {
     }
 
     addForce(x, y, dx, dy, colorAmount) {
-        let radius = 2;
+        let radius = 2; // Brush size
         for(let j = -radius; j <= radius; j++) {
             for(let i = -radius; i <= radius; i++) {
                 if(i * i + j * j <= radius * radius) {
@@ -141,12 +94,10 @@ class Fluid {
                     
                     if (cx > 0 && cx < this.cols - 1 && cy > 0 && cy < this.rows - 1) {
                         let idx = this.IX(cx, cy);
-                        
                         if (distSq === 0) {
                             this.density[idx] += densityAmount;
                             continue;
                         }
-                        
                         let dist = Math.sqrt(distSq);
                         let nx = i / dist;
                         let ny = j / dist;
@@ -176,8 +127,8 @@ class Fluid {
         this.advect(0, density, s, Vx, Vy, dt);
 
         for(let i = 0; i < this.size; i++) {
-            this.density[i] *= 0.95; 
-            this.Vx[i] *= 0.98;      
+            this.density[i] *= 0.95;
+            this.Vx[i] *= 0.98;
             this.Vy[i] *= 0.98;
         }
     }
@@ -215,7 +166,7 @@ class Fluid {
     }
 
     advect(b, d, d0, u, v, dt) {
-        let dt0 = dt * 15.0; 
+        let dt0 = dt * 15.0;
         for (let j = 1; j < this.rows - 1; j++) {
             for (let i = 1; i < this.cols - 1; i++) {
                 let x = i - dt0 * u[this.IX(i, j)];
@@ -256,17 +207,44 @@ class Fluid {
     }
 }
 
+// --- FISH CLASS ---
+class Fish {
+    constructor(x, y, vx) {
+        this.x = x;
+        this.startY = y;
+        this.y = y;
+        this.vx = vx;
+        this.bobSpeed = 2 + Math.random() * 2;
+        // Orange/Gold Koi colors
+        const fishColors = ['#FFAA00', '#FF7700', '#FF4500', '#FFD700'];
+        this.color = fishColors[Math.floor(Math.random() * fishColors.length)];
+    }
+
+    update(time) {
+        this.x += this.vx;
+        // Organic bobbing up and down
+        this.y = this.startY + Math.sin(time * this.bobSpeed) * 1.5;
+
+        // Fish generate a wake in the fluid
+        let tailX = this.vx > 0 ? this.x - 2 : this.x + 22;
+        let tailY = this.y + 3;
+        if (tailX > 0 && tailX < cols && tailY > 0 && tailY < rows) {
+            fluid.addForce(Math.floor(tailX), Math.floor(tailY), this.vx * 1.5, 0, 0.2);
+        }
+
+        // Wrap screen
+        if (this.vx > 0 && this.x > cols + 5) this.x = -25;
+        if (this.vx < 0 && this.x < -25) this.x = cols + 5;
+    }
+}
+
+let fishes = [];
+
 // --- SETUP & EVENT LISTENERS ---
 function init() {
     ctx.font = `${fontSize}px monospace`;
     fontWidth = ctx.measureText('M').width;
     resize();
-    
-    // Spawn initial school of fish
-    fishes = [];
-    for (let i = 0; i < 20; i++) {
-        fishes.push(new Fish(cols, rows));
-    }
 }
 
 function resize() {
@@ -279,6 +257,14 @@ function resize() {
     ctx.textBaseline = 'top';
     
     fluid = new Fluid(cols, rows);
+    
+    // Spawn some big fish!
+    fishes = [
+        new Fish(-10, rows * 0.2, 0.08),
+        new Fish(cols * 0.8, rows * 0.4, -0.06),
+        new Fish(cols * 0.3, rows * 0.7, 0.1),
+        new Fish(cols + 10, rows * 0.85, -0.09)
+    ];
 }
 
 window.addEventListener('resize', resize);
@@ -289,7 +275,6 @@ let lastX = 0, lastY = 0;
 let clickStartTime = 0;
 
 function handleStart(e) {
-    if (e.target.closest('#modal-window')) return;
     isDrawing = true;
     clickStartTime = Date.now();
     let point = e.touches ? e.touches[0] : e;
@@ -312,7 +297,6 @@ function handleMove(e) {
     let point = e.touches ? e.touches[0] : e;
     let currX = point.clientX;
     let currY = point.clientY;
-    
     let dx = currX - lastX;
     let dy = currY - lastY;
     
@@ -328,7 +312,7 @@ function handleMove(e) {
         let t = steps === 0 ? 0 : i / steps;
         let cx = Math.floor(gridX0 + (gridX1 - gridX0) * t);
         let cy = Math.floor(gridY0 + (gridY1 - gridY0) * t);
-        fluid.addForce(cx, cy, dx * 0.1, dy * 0.1, 4.0); 
+        fluid.addForce(cx, cy, dx * 0.1, dy * 0.1, 4.0);
     }
     
     lastX = currX;
@@ -342,21 +326,64 @@ window.addEventListener('touchstart', handleStart);
 window.addEventListener('touchend', handleEnd);
 window.addEventListener('touchmove', handleMove);
 
+// Window minimize logic
+const minimizeBtn = document.getElementById('minimize-btn');
+const modalWindow = document.getElementById('modal-window');
+
+minimizeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    modalWindow.classList.toggle('minimized');
+    minimizeBtn.textContent = modalWindow.classList.contains('minimized') ? '□' : '_';
+});
+
+// Prevent fluid interactions inside window
+['mousedown', 'touchstart', 'mousemove', 'touchmove', 'mouseup', 'touchend'].forEach(evt => {
+    modalWindow.addEventListener(evt, e => e.stopPropagation());
+});
+
 // --- RENDER LOOP ---
 let time = 0;
 
 function render() {
-    time += 0.015; 
+    time += 0.015;
+    fluid.step();
     
-    fluid.step(); 
-    
-    // Draw background
-    ctx.fillStyle = isDarkMode ? '#010409' : '#e2e8f0';
+    ctx.fillStyle = '#010409';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Render calm waves mapped by fluid momentum
+    // Build the fish character map for this frame
+    let fishMap = new Map();
+    for (let f of fishes) {
+        f.update(time);
+        let art = f.vx > 0 ? bigFishRight : bigFishLeft;
+        
+        for (let r = 0; r < art.length; r++) {
+            for (let c = 0; c < art[r].length; c++) {
+                let char = art[r][c];
+                if (char !== ' ') { // Only draw non-empty parts of the fish
+                    let gx = Math.floor(f.x) + c;
+                    let gy = Math.floor(f.y) + r;
+                    if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
+                        fishMap.set(gx + gy * cols, { char: char, color: f.color });
+                    }
+                }
+            }
+        }
+    }
+
     for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
+            let gridIdx = x + y * cols;
+            
+            // Check if a fish character occupies this cell
+            if (fishMap.has(gridIdx)) {
+                let fData = fishMap.get(gridIdx);
+                ctx.fillStyle = fData.color;
+                ctx.fillText(fData.char, x * fontWidth, y * fontSize);
+                continue; // Skip rendering the sea wave for this cell
+            }
+            
+            // Render normal sea
             let idx = fluid.IX(x, y);
             let vx = fluid.Vx[idx];
             let vy = fluid.Vy[idx];
@@ -370,7 +397,6 @@ function render() {
             let wave3 = Math.sin(nx * 0.4 + ny * 0.6 - time * 0.4);
             
             let value = (wave1 + wave2 + wave3) / 3;
-            
             value += d * 0.25; 
             
             if (value > 0.85 && Math.random() > 0.95) {
@@ -378,148 +404,15 @@ function render() {
             }
 
             let normalized = (value + 1) / 2;
-            let index = Math.floor(normalized * palette.length);
-            index = Math.max(0, Math.min(palette.length - 1, index));
+            let cIndex = Math.floor(normalized * palette.length);
+            cIndex = Math.max(0, Math.min(palette.length - 1, cIndex));
 
-            ctx.fillStyle = colors[index];
-            ctx.fillText(palette[index], x * fontWidth, y * fontSize);
+            ctx.fillStyle = colors[cIndex];
+            ctx.fillText(palette[cIndex], x * fontWidth, y * fontSize);
         }
-    }
-    
-    // Render Fish
-    for (let i = 0; i < fishes.length; i++) {
-        fishes[i].update(cols, rows, fluid);
-        fishes[i].draw(ctx, fontWidth, fontSize);
     }
     
     requestAnimationFrame(render);
 }
+
 render();
-
-// --- WINDOW & TERMINAL LOGIC ---
-const minimizeBtn = document.getElementById('minimize-btn');
-const themeBtn = document.getElementById('theme-btn');
-const modalWindow = document.getElementById('modal-window');
-
-function toggleTheme() {
-    isDarkMode = !isDarkMode;
-    document.body.classList.toggle('dark-mode', isDarkMode);
-    themeBtn.textContent = isDarkMode ? '☀' : '☾';
-}
-
-themeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleTheme();
-    printLine(`Theme switched to ${isDarkMode ? 'Dark' : 'Light'} Mode.`);
-});
-
-minimizeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    modalWindow.classList.toggle('minimized');
-    minimizeBtn.textContent = modalWindow.classList.contains('minimized') ? '□' : '_';
-});
-
-// Prevent fluid canvas interactions when operating the window
-modalWindow.addEventListener('mousedown', (e) => e.stopPropagation());
-modalWindow.addEventListener('touchstart', (e) => e.stopPropagation());
-modalWindow.addEventListener('mousemove', (e) => e.stopPropagation());
-modalWindow.addEventListener('touchmove', (e) => e.stopPropagation());
-modalWindow.addEventListener('mouseup', (e) => e.stopPropagation());
-modalWindow.addEventListener('touchend', (e) => e.stopPropagation());
-
-// Terminal Implementation
-const termInput = document.getElementById('terminal-input');
-const termOutput = document.getElementById('terminal-output');
-const termContainer = document.getElementById('terminal');
-
-const cmds = {
-    'help': 'Available commands:\n  help   - Show this message\n  clear  - Clear terminal output\n  splash - Create a random fluid splash\n  color  - Change wave base color (usage: color R G B)\n  fish   - Add more fish to the sea (usage: fish [count])\n  theme  - Toggle Dark/Light Mode\n  echo   - Print given text\n  about  - ASCII Sea OS info',
-    'about': 'ASCII Sea OS v1.0.0\nPowered by Navier-Stokes Stable Fluids algorithm.',
-    'clear': () => { termOutput.innerHTML = ''; }
-};
-
-termInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
-        const val = this.value.trim();
-        this.value = '';
-        
-        if (val) {
-            printLine(`root@sea:~$ ${val}`);
-            runCmd(val);
-        }
-    }
-});
-
-function printLine(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    termOutput.appendChild(div);
-    termContainer.scrollTop = termContainer.scrollHeight;
-}
-
-function runCmd(inputStr) {
-    const args = inputStr.split(' ');
-    const cmd = args[0].toLowerCase();
-
-    if (cmd === 'clear') {
-        cmds['clear']();
-    } else if (cmds[cmd] && typeof cmds[cmd] === 'string') {
-        printLine(cmds[cmd]);
-    } else if (cmd === 'echo') {
-        printLine(args.slice(1).join(' '));
-    } else if (cmd === 'splash') {
-        let cx = Math.floor(cols / 2);
-        let cy = Math.floor(rows / 2);
-        fluid.applyCircularForce(cx, cy, 3.0);
-        printLine('Splash deployed at coordinates (' + cx + ', ' + cy + ')');
-    } else if (cmd === 'theme') {
-        toggleTheme();
-        printLine(`Theme switched to ${isDarkMode ? 'Dark' : 'Light'} Mode.`);
-    } else if (cmd === 'fish') {
-        let amount = parseInt(args[1]) || 1;
-        if (amount > 0 && amount < 1000) {
-            for (let i = 0; i < amount; i++) {
-                fishes.push(new Fish(cols, rows));
-            }
-            printLine(`Spawned ${amount} new fish. Total population: ${fishes.length}`);
-        } else {
-            printLine(`bash: fish: invalid amount`);
-        }
-    } else if (cmd === 'color') {
-        if (args.length === 4) {
-            let r = parseInt(args[1]);
-            let g = parseInt(args[2]);
-            let b = parseInt(args[3]);
-            
-            if (!isNaN(r) && !isNaN(g) && !isNaN(b) && 
-                r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255) {
-                
-                for (let i = 0; i < 12; i++) {
-                    let cr, cg, cb;
-                    if (i <= 7) {
-                        let t = (i + 1) / 8; 
-                        cr = Math.floor(r * t);
-                        cg = Math.floor(g * t);
-                        cb = Math.floor(b * t);
-                    } else {
-                        let t = (i - 7) / 4; 
-                        cr = Math.floor(r + (255 - r) * t);
-                        cg = Math.floor(g + (255 - g) * t);
-                        cb = Math.floor(b + (255 - b) * t);
-                    }
-                    colors[i] = `rgb(${cr}, ${cg}, ${cb})`;
-                }
-                printLine(`Sea color updated to base RGB(${r}, ${g}, ${b})`);
-            } else {
-                printLine(`bash: color: arguments must be integers between 0 and 255`);
-            }
-        } else {
-            printLine(`Usage: color <R> <G> <B> (e.g., color 255 0 100)`);
-        }
-    } else {
-        printLine(`bash: ${cmd}: command not found`);
-    }
-}
-
-// Keep focus on input when clicking terminal area
-termContainer.addEventListener('click', () => termInput.focus());
