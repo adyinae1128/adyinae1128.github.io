@@ -5,7 +5,8 @@ document.body.appendChild(canvas);
 let cols, rows, fontWidth;
 const fontSize = 16;
 let fluid;
-let isDarkMode = false; // Default is Light Mode
+let isDarkMode = false;
+let fishes = [];
 
 // Characters ordered by visual density
 const palette = ['.', ',', '-', '~', '/', '+', '=', '?', 'X', '&', '#', '@'];
@@ -16,6 +17,72 @@ let colors = [
     '#00528A', '#0069AC', '#0081D0', '#009BFA',
     '#33B1FF', '#66C8FF', '#99E0FF', '#FFFFFF' 
 ];
+
+// --- AUTONOMOUS FISH AI ---
+class Fish {
+    constructor(cols, rows) {
+        this.x = Math.random() * cols;
+        this.y = Math.random() * rows;
+        this.angle = Math.random() * Math.PI * 2;
+        this.targetAngle = this.angle;
+        this.baseSpeed = 0.04 + Math.random() * 0.04;
+        
+        // Distinct, bright colors to stand out from the blue sea
+        this.color = ['#FF8C00', '#FFA500', '#FFD700', '#FF4500'][Math.floor(Math.random() * 4)];
+        this.facingRight = true;
+    }
+
+    update(cols, rows, fluid) {
+        // Aimless wandering AI: Periodically pick a new direction
+        if (Math.random() < 0.02) {
+            this.targetAngle = this.angle + (Math.random() - 0.5) * Math.PI;
+        }
+        
+        // Smoothly steer towards the target angle
+        this.angle += (this.targetAngle - this.angle) * 0.05;
+
+        let vx = Math.cos(this.angle) * this.baseSpeed;
+        let vy = Math.sin(this.angle) * this.baseSpeed;
+
+        let fluidVx = 0;
+        let fluidVy = 0;
+        let gx = Math.floor(this.x);
+        let gy = Math.floor(this.y);
+
+        // Fluid physics interaction
+        if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
+            let idx = fluid.IX(gx, gy);
+            
+            // Get swept by the fluid currents
+            fluidVx = fluid.Vx[idx] * 3.0;
+            fluidVy = fluid.Vy[idx] * 3.0;
+            
+            // Fish push back against the water, generating tiny wakes/foam
+            if (Math.random() < 0.2) {
+                fluid.addForce(gx, gy, -vx * 0.5, -vy * 0.5, 0.5);
+            }
+        }
+
+        let totalVx = vx + fluidVx;
+        let totalVy = vy + fluidVy;
+
+        this.x += totalVx;
+        this.y += totalVy;
+        this.facingRight = totalVx >= 0;
+
+        // Wrap around screen edges seamlessly
+        if (this.x < -3) this.x = cols + 3;
+        if (this.x > cols + 3) this.x = -3;
+        if (this.y < -1) this.y = rows + 1;
+        if (this.y > rows + 1) this.y = -1;
+    }
+
+    draw(ctx, fontWidth, fontSize) {
+        ctx.fillStyle = this.color;
+        let char = this.facingRight ? '><>' : '<><';
+        ctx.fillText(char, this.x * fontWidth, this.y * fontSize);
+    }
+}
 
 // --- NAVIER-STOKES FLUID DYNAMICS (Stable Fluids) ---
 class Fluid {
@@ -42,7 +109,7 @@ class Fluid {
     }
 
     addForce(x, y, dx, dy, colorAmount) {
-        let radius = 2; // Brush size
+        let radius = 2;
         for(let j = -radius; j <= radius; j++) {
             for(let i = -radius; i <= radius; i++) {
                 if(i * i + j * j <= radius * radius) {
@@ -194,6 +261,12 @@ function init() {
     ctx.font = `${fontSize}px monospace`;
     fontWidth = ctx.measureText('M').width;
     resize();
+    
+    // Spawn initial school of fish
+    fishes = [];
+    for (let i = 0; i < 20; i++) {
+        fishes.push(new Fish(cols, rows));
+    }
 }
 
 function resize() {
@@ -216,7 +289,7 @@ let lastX = 0, lastY = 0;
 let clickStartTime = 0;
 
 function handleStart(e) {
-    if (e.target.closest('#modal-window')) return; // Ignore clicks in window
+    if (e.target.closest('#modal-window')) return;
     isDrawing = true;
     clickStartTime = Date.now();
     let point = e.touches ? e.touches[0] : e;
@@ -277,10 +350,11 @@ function render() {
     
     fluid.step(); 
     
-    // Dynamically update the canvas background based on current theme
+    // Draw background
     ctx.fillStyle = isDarkMode ? '#010409' : '#e2e8f0';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Render calm waves mapped by fluid momentum
     for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
             let idx = fluid.IX(x, y);
@@ -311,6 +385,13 @@ function render() {
             ctx.fillText(palette[index], x * fontWidth, y * fontSize);
         }
     }
+    
+    // Render Fish
+    for (let i = 0; i < fishes.length; i++) {
+        fishes[i].update(cols, rows, fluid);
+        fishes[i].draw(ctx, fontWidth, fontSize);
+    }
+    
     requestAnimationFrame(render);
 }
 render();
@@ -352,7 +433,7 @@ const termOutput = document.getElementById('terminal-output');
 const termContainer = document.getElementById('terminal');
 
 const cmds = {
-    'help': 'Available commands:\n  help   - Show this message\n  clear  - Clear terminal output\n  splash - Create a random fluid splash\n  color  - Change wave base color (usage: color R G B)\n  theme  - Toggle Dark/Light Mode\n  echo   - Print given text\n  about  - ASCII Sea OS info',
+    'help': 'Available commands:\n  help   - Show this message\n  clear  - Clear terminal output\n  splash - Create a random fluid splash\n  color  - Change wave base color (usage: color R G B)\n  fish   - Add more fish to the sea (usage: fish [count])\n  theme  - Toggle Dark/Light Mode\n  echo   - Print given text\n  about  - ASCII Sea OS info',
     'about': 'ASCII Sea OS v1.0.0\nPowered by Navier-Stokes Stable Fluids algorithm.',
     'clear': () => { termOutput.innerHTML = ''; }
 };
@@ -392,8 +473,18 @@ function runCmd(inputStr) {
         fluid.applyCircularForce(cx, cy, 3.0);
         printLine('Splash deployed at coordinates (' + cx + ', ' + cy + ')');
     } else if (cmd === 'theme') {
-        toggleTheme(); 
+        toggleTheme();
         printLine(`Theme switched to ${isDarkMode ? 'Dark' : 'Light'} Mode.`);
+    } else if (cmd === 'fish') {
+        let amount = parseInt(args[1]) || 1;
+        if (amount > 0 && amount < 1000) {
+            for (let i = 0; i < amount; i++) {
+                fishes.push(new Fish(cols, rows));
+            }
+            printLine(`Spawned ${amount} new fish. Total population: ${fishes.length}`);
+        } else {
+            printLine(`bash: fish: invalid amount`);
+        }
     } else if (cmd === 'color') {
         if (args.length === 4) {
             let r = parseInt(args[1]);
