@@ -6,38 +6,24 @@ let cols, rows, fontWidth;
 const fontSize = 16;
 let fluid;
 
-// Characters ordered by visual density
 const palette = ['.', ',', '-', '~', '/', '+', '=', '?', 'X', '&', '#', '@'];
 
-// Colors for the sea, from deep troughs to bright wave crests/foam
-const colors = [
+// Color themes configuration
+const darkColors = [
     '#000B18', '#001A33', '#002B4E', '#003E6B',
     '#00528A', '#0069AC', '#0081D0', '#009BFA',
     '#33B1FF', '#66C8FF', '#99E0FF', '#FFFFFF' 
 ];
 
-// --- BIG FISH ASCII ART ---
-const bigFishRight = [
-    "      _..----.._    ",
-    "    .'  .--.    '-. ",
-    "   /   /    \\      \\",
-    "><(   (  O   )      )",
-    "   \\   \\    /      /",
-    "    '._ '--'    .-' ",
-    "       `\"----\"`     "
+const lightColors = [
+    '#D0E1FD', '#B8D3FC', '#9FC4FB', '#85B6FA',
+    '#6CA8F9', '#5299F8', '#388BF8', '#1F7CF7',
+    '#0969DA', '#0550AE', '#033D8B', '#0A3069'
 ];
 
-const bigFishLeft = [
-    "    _..----.._      ",
-    " .-'    .--.  '.    ",
-    "/      /    \\   \\   ",
-    "(      (   O  )   )><",
-    "\\      \\    /   /   ",
-    " '-.    '--' _.'    ",
-    "    `\"----\"`        "
-];
+let colors = darkColors;
 
-// --- NAVIER-STOKES FLUID DYNAMICS (Stable Fluids) ---
+// --- NAVIER-STOKES FLUID DYNAMICS ---
 class Fluid {
     constructor(cols, rows) {
         this.cols = cols;
@@ -62,7 +48,7 @@ class Fluid {
     }
 
     addForce(x, y, dx, dy, colorAmount) {
-        let radius = 2; // Brush size
+        let radius = 2; 
         for(let j = -radius; j <= radius; j++) {
             for(let i = -radius; i <= radius; i++) {
                 if(i * i + j * j <= radius * radius) {
@@ -91,7 +77,6 @@ class Fluid {
                 if (distSq <= radius * radius) {
                     let cx = x + i;
                     let cy = y + j;
-                    
                     if (cx > 0 && cx < this.cols - 1 && cy > 0 && cy < this.rows - 1) {
                         let idx = this.IX(cx, cy);
                         if (distSq === 0) {
@@ -102,7 +87,6 @@ class Fluid {
                         let nx = i / dist;
                         let ny = j / dist;
                         let falloff = 1 - (dist / radius);
-                        
                         this.Vx[idx] += nx * force * falloff;
                         this.Vy[idx] += ny * force * falloff;
                         this.density[idx] += densityAmount * falloff;
@@ -207,34 +191,145 @@ class Fluid {
     }
 }
 
-// --- FISH CLASS ---
+// --- PROCEDURAL KOI FISH CLASS ---
 class Fish {
-    constructor(x, y, vx) {
+    constructor(x, y) {
+        this.numSegments = 24; 
+        this.spacing = 1.2; 
+        this.segments = [];
         this.x = x;
-        this.startY = y;
         this.y = y;
-        this.vx = vx;
-        this.bobSpeed = 2 + Math.random() * 2;
-        // Orange/Gold Koi colors
-        const fishColors = ['#FFAA00', '#FF7700', '#FF4500', '#FFD700'];
-        this.color = fishColors[Math.floor(Math.random() * fishColors.length)];
+        this.angle = Math.random() * Math.PI * 2;
+        this.speed = 0.15 + Math.random() * 0.1;
+        this.turnRate = 0;
+        this.seed = Math.random() * 1000;
+        
+        const types = ['kohaku', 'sanke', 'ogon', 'shiro'];
+        this.type = types[Math.floor(Math.random() * types.length)];
+        
+        for(let i = 0; i < this.numSegments; i++) {
+            this.segments.push({
+                x: x - Math.cos(this.angle) * i * this.spacing, 
+                y: y - Math.sin(this.angle) * i * this.spacing
+            });
+        }
     }
 
-    update(time) {
-        this.x += this.vx;
-        // Organic bobbing up and down
-        this.y = this.startY + Math.sin(time * this.bobSpeed) * 1.5;
+    getRadii() {
+        let r = [];
+        for (let i = 0; i < this.numSegments; i++) {
+            let t = i / (this.numSegments - 1);
+            let width;
+            if (t < 0.2) {
+                width = 1.0 + (t / 0.2) * 3.0; 
+            } else {
+                let taper = 1.0 - (t - 0.2) / 0.8;
+                width = 4.0 * Math.pow(taper, 0.8);
+            }
+            r.push(Math.max(width, 0.3));
+        }
+        return r;
+    }
 
-        // Fish generate a wake in the fluid
-        let tailX = this.vx > 0 ? this.x - 2 : this.x + 22;
-        let tailY = this.y + 3;
-        if (tailX > 0 && tailX < cols && tailY > 0 && tailY < rows) {
-            fluid.addForce(Math.floor(tailX), Math.floor(tailY), this.vx * 1.5, 0, 0.2);
+    getFinWidth(i) {
+        let t = i / (this.numSegments - 1);
+        if (t > 0.15 && t < 0.3) {
+            let ft = (t - 0.15) / 0.15;
+            return Math.sin(ft * Math.PI) * 3.5;
+        }
+        if (t > 0.85) {
+            let ft = (t - 0.85) / 0.15;
+            return ft * 3.5;
+        }
+        return 0;
+    }
+
+    getColor(i, w, isFin) {
+        if (isFin) return document.body.classList.contains('light-mode') ? '#0069AC' : '#66C8FF'; 
+        
+        let stableW = Math.round(w);
+        let noise = Math.sin(i * 0.3 + this.seed) + Math.cos(stableW * 0.8 + this.seed * 1.5);
+        let c = document.body.classList.contains('light-mode') ? '#444444' : '#EEEEEE'; 
+        
+        if (this.type === 'kohaku') {
+            if (noise > 0.2) c = '#FF4400';
+        } else if (this.type === 'sanke') {
+            if (noise > 0.8) c = '#111111';
+            else if (noise > 0.0) c = '#FF4400';
+        } else if (this.type === 'ogon') {
+            c = (noise > 0) ? '#FFB300' : '#FFD700';
+        } else if (this.type === 'shiro') {
+            if (noise > 0.3) c = '#111111';
+        }
+        return c;
+    }
+
+    getChar(i, w, isFin, r) {
+        if (isFin) return '~';
+        let stableW = Math.round(w);
+        
+        if (i <= 2) { 
+            if (Math.abs(w) >= r - 1.2 && Math.abs(w) <= r) return 'O'; 
+            return '@';
+        }
+        
+        const chars = ['@', '8', '&', '#', '%', 'x', '*'];
+        let idx = Math.floor(Math.abs(Math.sin(i * 1.5 + stableW + this.seed)) * chars.length);
+        return chars[idx % chars.length];
+    }
+
+    update(time, cols, rows) {
+        this.turnRate = Math.sin(time * 0.5 + this.seed) * 0.04 + Math.cos(time * 0.3 + this.seed) * 0.02;
+        
+        let margin = 20;
+        let targetAngle = null;
+        
+        if (this.x < margin) targetAngle = 0;
+        else if (this.x > cols - margin) targetAngle = Math.PI;
+        
+        if (this.y < margin) {
+            targetAngle = (targetAngle !== null) ? (targetAngle + Math.PI/2)/2 : Math.PI/2;
+            if (this.x > cols - margin) targetAngle = Math.PI * 0.75; 
+            if (this.x < margin) targetAngle = Math.PI * 0.25; 
+        } else if (this.y > rows - margin) {
+            targetAngle = (targetAngle !== null) ? (targetAngle - Math.PI/2)/2 : -Math.PI/2;
+            if (this.x > cols - margin) targetAngle = -Math.PI * 0.75;
+            if (this.x < margin) targetAngle = -Math.PI * 0.25;
         }
 
-        // Wrap screen
-        if (this.vx > 0 && this.x > cols + 5) this.x = -25;
-        if (this.vx < 0 && this.x < -25) this.x = cols + 5;
+        if (targetAngle !== null) {
+            let diff = targetAngle - this.angle;
+            while(diff < -Math.PI) diff += Math.PI * 2;
+            while(diff > Math.PI) diff -= Math.PI * 2;
+            this.turnRate += diff * 0.03; 
+        }
+        
+        this.angle += this.turnRate;
+        
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+        
+        this.segments[0].x = this.x;
+        this.segments[0].y = this.y;
+        
+        for (let i = 1; i < this.numSegments; i++) {
+            let dx = this.segments[i-1].x - this.segments[i].x;
+            let dy = this.segments[i-1].y - this.segments[i].y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > this.spacing) {
+                let moveDist = dist - this.spacing;
+                this.segments[i].x += (dx / dist) * moveDist;
+                this.segments[i].y += (dy / dist) * moveDist;
+            }
+        }
+        
+        fluid.addForce(Math.floor(this.x), Math.floor(this.y), Math.cos(this.angle) * this.speed * 2, Math.sin(this.angle) * this.speed * 2, 0.4);
+        
+        let tailSeg = this.segments[this.numSegments - 1];
+        let tailPrev = this.segments[this.numSegments - 3];
+        let tailDirX = tailSeg.x - tailPrev.x;
+        let tailDirY = tailSeg.y - tailPrev.y;
+        fluid.addForce(Math.floor(tailSeg.x), Math.floor(tailSeg.y), tailDirX * 1.5, tailDirY * 1.5, 0.3);
     }
 }
 
@@ -258,12 +353,11 @@ function resize() {
     
     fluid = new Fluid(cols, rows);
     
-    // Spawn some big fish!
     fishes = [
-        new Fish(-10, rows * 0.2, 0.08),
-        new Fish(cols * 0.8, rows * 0.4, -0.06),
-        new Fish(cols * 0.3, rows * 0.7, 0.1),
-        new Fish(cols + 10, rows * 0.85, -0.09)
+        new Fish(cols * 0.2, rows * 0.2),
+        new Fish(cols * 0.8, rows * 0.4),
+        new Fish(cols * 0.3, rows * 0.7),
+        new Fish(cols * 0.7, rows * 0.8)
     ];
 }
 
@@ -326,8 +420,9 @@ window.addEventListener('touchstart', handleStart);
 window.addEventListener('touchend', handleEnd);
 window.addEventListener('touchmove', handleMove);
 
-// Window minimize logic
+// --- Window & Theme Controls ---
 const minimizeBtn = document.getElementById('minimize-btn');
+const themeBtn = document.getElementById('theme-btn');
 const modalWindow = document.getElementById('modal-window');
 
 minimizeBtn.addEventListener('click', (e) => {
@@ -336,7 +431,19 @@ minimizeBtn.addEventListener('click', (e) => {
     minimizeBtn.textContent = modalWindow.classList.contains('minimized') ? '□' : '_';
 });
 
-// Prevent fluid interactions inside window
+themeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.body.classList.toggle('light-mode');
+    if (document.body.classList.contains('light-mode')) {
+        themeBtn.textContent = '☽'; // Moon icon for switching to dark mode
+        colors = lightColors;
+    } else {
+        themeBtn.textContent = '☀'; // Sun icon for switching to light mode
+        colors = darkColors;
+    }
+});
+
+// Prevent fluid interactions when clicking inside the window
 ['mousedown', 'touchstart', 'mousemove', 'touchmove', 'mouseup', 'touchend'].forEach(evt => {
     modalWindow.addEventListener(evt, e => e.stopPropagation());
 });
@@ -348,23 +455,47 @@ function render() {
     time += 0.015;
     fluid.step();
     
-    ctx.fillStyle = '#010409';
+    let isLight = document.body.classList.contains('light-mode');
+    ctx.fillStyle = isLight ? '#F0F4F8' : '#010409';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Build the fish character map for this frame
     let fishMap = new Map();
+    let aspect = fontWidth / fontSize; 
+    
     for (let f of fishes) {
-        f.update(time);
-        let art = f.vx > 0 ? bigFishRight : bigFishLeft;
+        f.update(time, cols, rows);
+        let radii = f.getRadii();
         
-        for (let r = 0; r < art.length; r++) {
-            for (let c = 0; c < art[r].length; c++) {
-                let char = art[r][c];
-                if (char !== ' ') { // Only draw non-empty parts of the fish
-                    let gx = Math.floor(f.x) + c;
-                    let gy = Math.floor(f.y) + r;
-                    if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
-                        fishMap.set(gx + gy * cols, { char: char, color: f.color });
+        for (let i = 0; i < f.numSegments; i++) {
+            let seg = f.segments[i];
+            let nextSeg = i === 0 ? {x: f.x + Math.cos(f.angle), y: f.y + Math.sin(f.angle)} : f.segments[i-1];
+            
+            let dx = nextSeg.x - seg.x;
+            let dy = nextSeg.y - seg.y;
+            let len = Math.sqrt(dx*dx + dy*dy);
+            if (len === 0) continue;
+            
+            let nx = -dy / len;
+            let ny = dx / len;
+            
+            let r = radii[i];
+            let finW = f.getFinWidth(i);
+            let maxW = r + finW;
+            
+            for (let w = -maxW; w <= maxW; w += 0.3) {
+                let isFin = Math.abs(w) > r;
+                if (isFin && finW === 0) continue; 
+                
+                let px = Math.floor(seg.x + nx * w);
+                let py = Math.floor(seg.y + ny * (w * aspect)); 
+                
+                if (px >= 0 && px < cols && py >= 0 && py < rows) {
+                    let gridIdx = px + py * cols;
+                    let c = f.getColor(i, w, isFin);
+                    let char = f.getChar(i, w, isFin, r);
+                    
+                    if (!fishMap.has(gridIdx) || (!isFin && fishMap.get(gridIdx).isFin)) {
+                        fishMap.set(gridIdx, {char: char, color: c, isFin: isFin});
                     }
                 }
             }
@@ -375,15 +506,13 @@ function render() {
         for (let x = 0; x < cols; x++) {
             let gridIdx = x + y * cols;
             
-            // Check if a fish character occupies this cell
             if (fishMap.has(gridIdx)) {
                 let fData = fishMap.get(gridIdx);
                 ctx.fillStyle = fData.color;
                 ctx.fillText(fData.char, x * fontWidth, y * fontSize);
-                continue; // Skip rendering the sea wave for this cell
+                continue; 
             }
             
-            // Render normal sea
             let idx = fluid.IX(x, y);
             let vx = fluid.Vx[idx];
             let vy = fluid.Vy[idx];
@@ -399,9 +528,7 @@ function render() {
             let value = (wave1 + wave2 + wave3) / 3;
             value += d * 0.25; 
             
-            if (value > 0.85 && Math.random() > 0.95) {
-                value += 0.2;
-            }
+            if (value > 0.85 && Math.random() > 0.95) value += 0.2;
 
             let normalized = (value + 1) / 2;
             let cIndex = Math.floor(normalized * palette.length);
